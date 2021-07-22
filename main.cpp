@@ -15,15 +15,17 @@
 struct DNSHeader {
     unsigned short ID; // 2 byte
 
+    // 注意位域中的位序：每个字节里面的位反着放
     // FLAGS: 2 byte
-    unsigned char QR: 1; // 1 bit
-    unsigned char opcode: 4;
-    unsigned char AA: 1;
-    unsigned char TC: 1;
     unsigned char RD: 1;
-    unsigned char RA: 1;
-    unsigned char zero: 3;
+    unsigned char TC: 1;
+    unsigned char AA: 1;
+    unsigned char opcode: 4;
+    unsigned char QR: 1; // 1 bit
+
     unsigned char rcode: 4;
+    unsigned char zero: 3;
+    unsigned char RA: 1;
 
     //RRs: 8 byte
     unsigned short Ques;
@@ -39,7 +41,7 @@ void SetHead (DNSHeader* header) {
     header->opcode = 0;
     header->AA = 0;
     header->TC = 0;
-    header->RD = 0; // 1
+    header->RD = 1; // 1
     header->RA = 0;
     header->zero = 0;
     header->rcode = 0;
