@@ -118,7 +118,7 @@ int AnswerRRs(unsigned char* RecvMsg, int LenSend) {
     return AnsRRs;
 }
 
-int ParseMsg(unsigned char* RecvMsg, int LenSend, int RRs, int ** addr, int LenName) {
+int ParseAMsg(unsigned char* RecvMsg, int LenSend, int RRs, int ** addr, int LenName) {
     int pos = LenSend;
     int AddrRRs = RRs;
     // 遍历每条answer
@@ -154,6 +154,44 @@ int ParseMsg(unsigned char* RecvMsg, int LenSend, int RRs, int ** addr, int LenN
     return AddrRRs;
 }
 
+void ParseNSMsg(unsigned char* RecvMsg, int LenSend, int RRs, char ** ns) {
+    int LenName;
+    int pos = LenSend;
+    int AddrRRs = RRs;
+    for (int i = 0; i < RRs; i++) {
+        pos += 10;
+        short * ptr;
+        ptr = (short *)(RecvMsg + pos);
+        LenName = ntohs(*ptr);
+        ns[i] = (char*)malloc(sizeof(char) * LenName);
+        pos += 2;
+        int k = RecvMsg[pos];
+        int temp = -1;
+        int PrimPos = pos; // 记录pos初始位置
+
+        while(RecvMsg[pos + 1] != 0) {
+            temp ++;
+            pos ++;
+            // 第一个
+            if (k != 0 && k != 192) {
+                ns[i][temp] = (char)RecvMsg[pos];
+                k --;
+            } else {
+                // 域名可能部分重复，继而部分压缩。。所以查看是否为c0
+                if (RecvMsg[pos] == 192){
+                    pos = RecvMsg[pos + 1];
+//                    pos ++;
+                }
+                ns[i][temp] = '.';
+                k = RecvMsg[pos];
+            }
+        }
+        ns[i][temp] = RecvMsg[pos];
+        ns[i][temp + 1] = '\0';
+        pos += 2;
+    }
+}
+
 int main (int argc, char **argv) {
     DNSHeader header{};
     unsigned char buf[MAX_SIZE]; // socket发送的数据
@@ -171,8 +209,8 @@ int main (int argc, char **argv) {
      * 初始化默认参数
      * */
     std::string server = "114.114.114.114";
-    strcpy(DN, "hustunique.com");
-    type = 1;
+    strcpy(DN, "huaweicloud.com");
+    type = 2;
 
     /*
      * 先使用标准输入输出，之后改成命令行参数
@@ -204,27 +242,14 @@ int main (int argc, char **argv) {
         }
     }
 
-//    printf("%d", ch);
-
-
-//    printf("输入需要解析的域名：");
-//    scanf("%s", DN);
-    // printf("%s", DN);
-
+    //
     LenSend = ChangeDN(DN, name);
     LenName = LenSend;
-//    printf("%d", LenSend);
-//    for (int i = 0; i < LenSend; i ++) {
-//        printf("%c.", name[i]);
-//    }
+
     int j;
 
     // 填充首部
     SetHead(&header, r);
-//    for (int i = 0; i < 12; i++) {
-//        printf("%x", &header+i);
-//    }
-//    printf("%d", sizeof(header));
     memcpy(buf, &header, sizeof(header) );
     // 填充查询字段
     SetQuery(name, buf, LenSend, type);
@@ -242,19 +267,35 @@ int main (int argc, char **argv) {
 
     int RR = AnswerRRs(RecvMsg,LenSend);
     int **addr = (int**)malloc(sizeof(int*) * RR);  //sizeof(int*),不能少*，一个指针的内存大小，每个元素是一个指针。
-    for (int i = 0;i < RR;i++)
-    {
-        addr[i] = (int*)malloc(sizeof(int) * 4);
-    }
-    int AddrRR = ParseMsg(RecvMsg, LenSend, RR, addr, LenName);
-//    printf("%s的IP地址为：\n", DN);
-    for (int i = RR - AddrRR; i < RR; i++) {
-        printf("%d.%d.%d.%d\n", addr[i][0], addr[i][1], addr[i][2], addr[i][3]);
+//  给a记录
+    //    for (int i = 0;i < RR;i++)
+//    {
+//        addr[i] = (int*)malloc(sizeof(int) * 4);
+//    }
+//  给ns记录
+    char **ns = (char**)malloc(sizeof(char*) * RR);
+//    std::string ns[RR];
+    ParseNSMsg(RecvMsg, LenSend, RR, ns);
+    for (int i = 0; i < RR; i++) {
+        int j = 0;
+        while(ns[i][j] != '\0') {
+            printf("%c", ns[i][j]);
+            j++;
+        }
+        printf("\n");
     }
 
-    for (int i = 0;i < RR;i++)
-        free(addr[i]);
-    free(addr);
+
+
+//    int AddrRR = ParseAMsg(RecvMsg, LenSend, RR, addr, LenName);
+////    printf("%s的IP地址为：\n", DN);
+//    for (int i = RR - AddrRR; i < RR; i++) {
+//        printf("%d.%d.%d.%d\n", addr[i][0], addr[i][1], addr[i][2], addr[i][3]);
+//    }
+//
+//    for (int i = 0;i < RR;i++)
+//        free(addr[i]);
+//    free(addr);
 
 
 }
