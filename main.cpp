@@ -36,13 +36,13 @@ struct DNSHeader {
 };
 
 // 根据wireshark的抓包逐位设置报文首部 共12字节
-void SetHead (DNSHeader* header) {
+void SetHead (DNSHeader* header, int r) {
     header->ID = (unsigned short) htons(getpid());
     header->QR = 0;
     header->opcode = 0;
     header->AA = 0;
     header->TC = 0;
-    header->RD = 1; // 1
+    header->RD = r; // 1
     header->RA = 0;
     header->zero = 0;
     header->rcode = 0;
@@ -53,7 +53,7 @@ void SetHead (DNSHeader* header) {
 }
 
 // 填充查询字段: 4 byte + len 查询名(不限长) 查询类型 查询类
-void SetQuery (char *name, unsigned char *buf, int len) {
+void SetQuery (char *name, unsigned char *buf, int len, int type) {
     memcpy(buf + 12, name, len); // 首部长12字节
     int pos = len + 12;
 //    for (int i = 0; i < pos; i ++) {
@@ -64,7 +64,7 @@ void SetQuery (char *name, unsigned char *buf, int len) {
     /*
      * 下一步：查询类型根据输入更改
      * */
-    buf[pos + 1] = 1; // Type: 2 byte A类型为1
+    buf[pos + 1] = type; // Type: 2 byte A类型为1
     buf[pos + 2] = 0;
     buf[pos + 3] = 1; // Class: 2 byte  IN为互联网地址
 //    for (int i = 0; i < pos + 4; i ++) {
@@ -154,7 +154,7 @@ int ParseMsg(unsigned char* RecvMsg, int LenSend, int RRs, int ** addr, int LenN
     return AddrRRs;
 }
 
-int main () {
+int main (int argc, char **argv) {
     DNSHeader header{};
     unsigned char buf[MAX_SIZE]; // socket发送的数据
     char DN[MAX_SIZE]; // 要解析的域名：www.xxx.yyy
@@ -164,13 +164,51 @@ int main () {
     int LenRecv = 0; // socket 接收报文长度
     int LenName = 0; // 域名长度
     int s;
+    int type; // 查询类型
+    int r = 0; // 是否递归查询
+
+    /*
+     * 初始化默认参数
+     * */
+    std::string server = "114.114.114.114";
+    strcpy(DN, "hustunique.com");
+    type = 1;
 
     /*
      * 先使用标准输入输出，之后改成命令行参数
      * */
     setbuf(stdout, 0);
-    printf("输入需要解析的域名：");
-    scanf("%s", DN);
+//    int ch = getopt(argc, argv, "s:n:t:r");
+    int ch;
+    while ((ch = getopt(argc, argv,"s:n:t:r"))!= -1) {
+        switch (ch) {
+            case 's':
+                server = optarg;
+//                printf("server is %s", server.c_str());
+                break;
+            case 'n':
+                strcpy(DN, optarg);
+//                printf("%s", optarg);
+                break;
+            case 't':
+                if (strcmp(optarg, "a") == 0){
+                    type = 1;
+                }
+                else if (strcmp(optarg, "ns") == 0){
+                    type = 2;
+                }
+            case 'r':
+                r = 1;
+            default:
+                break;
+        }
+    }
+
+//    printf("%d", ch);
+
+
+//    printf("输入需要解析的域名：");
+//    scanf("%s", DN);
     // printf("%s", DN);
 
     LenSend = ChangeDN(DN, name);
@@ -182,14 +220,14 @@ int main () {
     int j;
 
     // 填充首部
-    SetHead(&header);
+    SetHead(&header, r);
 //    for (int i = 0; i < 12; i++) {
 //        printf("%x", &header+i);
 //    }
 //    printf("%d", sizeof(header));
     memcpy(buf, &header, sizeof(header) );
     // 填充查询字段
-    SetQuery(name, buf, LenSend);
+    SetQuery(name, buf, LenSend, type);
 
     LenSend += 16; // 首部(12) + 查询类+类型(4) + len
     memset(RecvMsg, 0, MAX_SIZE);
@@ -209,7 +247,7 @@ int main () {
         addr[i] = (int*)malloc(sizeof(int) * 4);
     }
     int AddrRR = ParseMsg(RecvMsg, LenSend, RR, addr, LenName);
-    printf("%s的IP地址为：\n", DN);
+//    printf("%s的IP地址为：\n", DN);
     for (int i = RR - AddrRR; i < RR; i++) {
         printf("%d.%d.%d.%d\n", addr[i][0], addr[i][1], addr[i][2], addr[i][3]);
     }
