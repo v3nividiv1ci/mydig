@@ -168,6 +168,7 @@ void ParseNSMsg(unsigned char* RecvMsg, int LenSend, int RRs, char ** ns) {
         int k = RecvMsg[pos];
         int temp = -1;
         int PrimPos = pos; // 记录pos初始位置
+        int cmp = 0; // 记录是否被压缩
 
         while(RecvMsg[pos + 1] != 0) {
             temp ++;
@@ -179,6 +180,7 @@ void ParseNSMsg(unsigned char* RecvMsg, int LenSend, int RRs, char ** ns) {
             } else {
                 // 域名可能部分重复，继而部分压缩。。所以查看是否为c0
                 if (RecvMsg[pos] == 192){
+                    cmp = pos;
                     pos = RecvMsg[pos + 1];
 //                    pos ++;
                 }
@@ -189,6 +191,9 @@ void ParseNSMsg(unsigned char* RecvMsg, int LenSend, int RRs, char ** ns) {
         ns[i][temp] = RecvMsg[pos];
         ns[i][temp + 1] = '\0';
         pos += 2;
+        if (cmp != 0) {
+            pos = cmp + 2;
+        }
     }
 }
 
@@ -209,13 +214,10 @@ int main (int argc, char **argv) {
      * 初始化默认参数
      * */
     std::string server = "114.114.114.114";
-    strcpy(DN, "huaweicloud.com");
-    type = 2;
+    strcpy(DN, "hustunique.com");
+    type = 1;
 
-    /*
-     * 先使用标准输入输出，之后改成命令行参数
-     * */
-    setbuf(stdout, 0);
+//    setbuf(stdout, 0);
 //    int ch = getopt(argc, argv, "s:n:t:r");
     int ch;
     while ((ch = getopt(argc, argv,"s:n:t:r"))!= -1) {
@@ -246,7 +248,6 @@ int main (int argc, char **argv) {
     LenSend = ChangeDN(DN, name);
     LenName = LenSend;
 
-    int j;
 
     // 填充首部
     SetHead(&header, r);
@@ -266,36 +267,36 @@ int main (int argc, char **argv) {
 
 
     int RR = AnswerRRs(RecvMsg,LenSend);
-    int **addr = (int**)malloc(sizeof(int*) * RR);  //sizeof(int*),不能少*，一个指针的内存大小，每个元素是一个指针。
-//  给a记录
-    //    for (int i = 0;i < RR;i++)
-//    {
-//        addr[i] = (int*)malloc(sizeof(int) * 4);
-//    }
-//  给ns记录
-    char **ns = (char**)malloc(sizeof(char*) * RR);
-//    std::string ns[RR];
-    ParseNSMsg(RecvMsg, LenSend, RR, ns);
-    for (int i = 0; i < RR; i++) {
-        int j = 0;
-        while(ns[i][j] != '\0') {
-            printf("%c", ns[i][j]);
-            j++;
+
+    if (type == 1) {
+        int **addr = (int**)malloc(sizeof(int*) * RR);
+        for (int i = 0;i < RR;i++) {
+            addr[i] = (int*)malloc(sizeof(int) * 4);
         }
-        printf("\n");
+        int AddrRR = ParseAMsg(RecvMsg, LenSend, RR, addr, LenName);
+        for (int i = RR - AddrRR; i < RR; i++) {
+            printf("%d.%d.%d.%d\n", addr[i][0], addr[i][1], addr[i][2], addr[i][3]);
+        }
+
+        for (int i = 0;i < RR;i++)
+            free(addr[i]);
+        free(addr);
+
     }
-
-
-
-//    int AddrRR = ParseAMsg(RecvMsg, LenSend, RR, addr, LenName);
-////    printf("%s的IP地址为：\n", DN);
-//    for (int i = RR - AddrRR; i < RR; i++) {
-//        printf("%d.%d.%d.%d\n", addr[i][0], addr[i][1], addr[i][2], addr[i][3]);
-//    }
-//
-//    for (int i = 0;i < RR;i++)
-//        free(addr[i]);
-//    free(addr);
-
-
+    else if (type == 2) {
+        char **ns = (char**)malloc(sizeof(char*) * RR);
+        ParseNSMsg(RecvMsg, LenSend, RR, ns);
+        for (int i = 0; i < RR; i++) {
+            int j = 0;
+            while(ns[i][j] != '\0') {
+                printf("%c", ns[i][j]);
+                j++;
+            }
+            printf("\n");
+        }
+    }
+    else {
+        printf("unsupported type");
+        return 0;
+    }
 }
